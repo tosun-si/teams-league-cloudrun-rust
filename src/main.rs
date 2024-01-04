@@ -1,12 +1,23 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::convert::Infallible;
+use std::net::SocketAddr;
+
+use bytes::Bytes;
 use google_cloud_bigquery::client::{Client as bigQueryClient, ClientConfig as bigQueryClientConfig};
 use google_cloud_bigquery::http::tabledata::insert_all::InsertAllRequest;
 use google_cloud_storage::client::{Client as gcsClient, ClientConfig as gcsClientConfig};
 use google_cloud_storage::http::objects::download::Range;
 use google_cloud_storage::http::objects::get::GetObjectRequest;
+use http_body_util::{BodyExt, Full};
+use hyper::{Request, Response};
+use hyper::body::Body;
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use hyper_util::rt::TokioIo;
 use time::OffsetDateTime;
+use tokio::net::TcpListener;
 
 use domain::team_stats_mapper::TeamStatsMapper;
 use team_stats_bq_row_mapper::TeamStatsBQRowMapper;
@@ -19,8 +30,15 @@ lazy_static! {
     static ref INGESTION_DATE: Option<OffsetDateTime> = Some(OffsetDateTime::now_utc());
 }
 
-#[tokio::main]
-async fn main() {
+async fn raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>) -> Result<Response<Full<Bytes>>, Infallible> {
+    println!("######################Request URI######################");
+    println!("{:#?}", req.uri());
+    println!("######################");
+
+    if req.uri().eq("/favicon.ico") {
+        return Ok(Response::new(Full::new(Bytes::from("Not the expected URI, no treatment in this case"))));
+    }
+
     println!("Reading team stats raw data from Cloud Storage...");
 
     let gcs_client_config = gcsClientConfig::default().with_auth().await.unwrap();
@@ -29,7 +47,7 @@ async fn main() {
     // Download the file
     let input_file_as_bytes_res = gcs_client.download_object(&GetObjectRequest {
         bucket: "mazlum_dev".to_string(),
-        object: "airflow/team_league/elt/input_teams_stats_raw.json".to_string(),
+        object: "cloud_run/team_league/input/input_teams_stats_raw.json".to_string(),
         ..Default::default()
     }, &Range::default()).await;
 
@@ -61,7 +79,37 @@ async fn main() {
 
     let bigquery_insert_errors = result.insert_errors;
     match bigquery_insert_errors {
-        None => println!("The Team Stats domain data was correctly loaded to BigQuery"),
+        None => Ok(Response::new(Full::new(Bytes::from("The Team Stats domain data was correctly loaded to BigQuery")))),
         Some(e) => panic!("Error when trying to load the Team Stats domain data to BigQuery : {:#?}", e),
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+
+    // We create a TcpListener and bind it to 127.0.0.1:3000
+    let listener = TcpListener::bind(addr).await?;
+
+    // We start a loop to continuously accept incoming connections
+    loop {
+        let (stream, _) = listener.accept().await?;
+
+        // Use an adapter to access something implementing `tokio::io` traits as if they implement
+        // `hyper::rt` IO traits.
+        let io = TokioIo::new(stream);
+
+        // Spawn a tokio task to serve multiple connections concurrently
+        tokio::task::spawn(async move {
+            // Finally, we bind the incoming connection to our service
+            if let Err(err) = http1::Builder::new()
+                // `service_fn` converts our function in a `Service`
+                .serve_connection(io, service_fn(raw_to_team_stats_domain_and_load_result_bq))
+                .await
+            {
+                println!("Error serving connection: {:?}", err);
+            }
+        });
     }
 }

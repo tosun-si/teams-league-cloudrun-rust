@@ -1,0 +1,16 @@
+steps:
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:455.0.0-slim
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gcloud builds submit --tag "$LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$_IMAGE_TAG" .
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:455.0.0-slim
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gcloud run deploy $_SERVICE_NAME \
+        --region $LOCATION \
+        --image "$LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$_IMAGE_TAG" \
+        --allow-unauthenticated
