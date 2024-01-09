@@ -43,12 +43,12 @@ impl TeamStatsMapper {
         let top_scorer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goals)
-            .expect("Top scorer not found !!");
+            .expect(format!("Top scorer not found for the team !! {team_name}").as_str());
 
         let best_passer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goalAssists)
-            .expect("Best passer not found !!");
+            .expect(format!("Best passer not found for the team !! {team_name}").as_str());
 
         let top_scorer = domain::team_stats_structs::TopScorerStats {
             firstName: top_scorer_raw.scorerFirstName.to_string(),
