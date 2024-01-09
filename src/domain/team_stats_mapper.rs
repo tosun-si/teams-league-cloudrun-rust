@@ -35,6 +35,8 @@ impl TeamStatsMapper {
     fn map_to_team_stats_domain(ingestion_date: Option<OffsetDateTime>,
                                 team_slogans: HashMap<&str, &str>,
                                 team_stats_raw: TeamStatsRaw) -> TeamStats {
+        let team_name = team_stats_raw.teamName;
+
         let team_total_goals: i64 = team_stats_raw.scorers
             .iter()
             .map(|scorer| scorer.goals)
@@ -63,8 +65,6 @@ impl TeamStatsMapper {
             goalAssists: best_passer_raw.goalAssists,
             games: best_passer_raw.games,
         };
-
-        let team_name = team_stats_raw.teamName;
 
         let team_slogan = team_slogans.get(team_name.as_str())
             .expect(format!("Slogan not found for the team {team_name}").as_str());

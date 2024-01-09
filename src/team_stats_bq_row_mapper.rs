@@ -8,7 +8,7 @@ impl TeamStatsBQRowMapper {
     pub fn map_to_team_stats_bigquery_rows(team_stats_domain_list: Vec<TeamStats>) -> Vec<Row<TeamStats>> {
         team_stats_domain_list
             .iter()
-            .map(|team_stats| TeamStatsBQRowMapper::map_to_team_stats_bigquery_row(TeamStats::clone(team_stats)))
+            .map(|team_stats| TeamStatsBQRowMapper::map_to_team_stats_bigquery_row(team_stats.clone()))
             .collect::<Vec<Row<TeamStats>>>()
     }
 
