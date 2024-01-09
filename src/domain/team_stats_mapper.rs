@@ -48,7 +48,7 @@ impl TeamStatsMapper {
         let best_passer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goalAssists)
-            .expect("Bet passer not found !!");
+            .expect("Best passer not found !!");
 
         let top_scorer = domain::team_stats_structs::TopScorerStats {
             firstName: top_scorer_raw.scorerFirstName.to_string(),
