@@ -1,22 +1,25 @@
+use std::collections::HashMap;
 use std::str;
 
 use time::OffsetDateTime;
 
 use crate::domain;
-use crate::domain::team_stats_structs::TeamStatsRaw;
+use crate::domain::team_stats_structs::TeamScorerRaw;
 use crate::domain::team_stats_structs::TeamStats;
+use crate::domain::team_stats_structs::TeamStatsRaw;
 
 pub struct TeamStatsMapper;
 
 impl TeamStatsMapper {
     pub fn map_to_team_stats_domains(ingestion_date: Option<OffsetDateTime>,
-                                     result_file_as_string: Vec<u8>) -> Vec<TeamStats> {
-        str::from_utf8(result_file_as_string.as_slice())
+                                     team_slogans: HashMap<&str, &str>,
+                                     result_file_as_bytes: Vec<u8>) -> Vec<TeamStats> {
+        str::from_utf8(result_file_as_bytes.as_slice())
             .expect("")
             .split("\n")
             .filter(|team_stats_raw| !team_stats_raw.is_empty())
-            .map(|team_stats_str| TeamStatsMapper::deserialize_to_team_stats_raw_object(team_stats_str))
-            .map(|team_stats_raw| TeamStatsMapper::map_to_team_stats_domain(ingestion_date, team_stats_raw))
+            .map(TeamStatsMapper::deserialize_to_team_stats_raw_object)
+            .map(|team_stats_raw| TeamStatsMapper::map_to_team_stats_domain(ingestion_date, team_slogans.clone(), team_stats_raw))
             .collect::<Vec<TeamStats>>()
     }
 
@@ -30,18 +33,19 @@ impl TeamStatsMapper {
     }
 
     fn map_to_team_stats_domain(ingestion_date: Option<OffsetDateTime>,
+                                team_slogans: HashMap<&str, &str>,
                                 team_stats_raw: TeamStatsRaw) -> TeamStats {
         let team_total_goals: i64 = team_stats_raw.scorers
             .iter()
             .map(|scorer| scorer.goals)
             .sum();
 
-        let top_scorer_raw: &domain::team_stats_structs::TeamScorerRaw = team_stats_raw.scorers
+        let top_scorer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goals)
             .expect("Top scorer not found !!");
 
-        let best_passer_raw: &domain::team_stats_structs::TeamScorerRaw = team_stats_raw.scorers
+        let best_passer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goalAssists)
             .expect("Bet passer not found !!");
@@ -60,11 +64,16 @@ impl TeamStatsMapper {
             games: best_passer_raw.games,
         };
 
+        let team_name = team_stats_raw.teamName;
+
+        let team_slogan = team_slogans.get(team_name.as_str())
+            .expect(format!("Slogan not found for the team {team_name}").as_str());
+
         TeamStats {
-            teamName: team_stats_raw.teamName,
+            teamName: team_name,
             teamScore: team_stats_raw.teamScore,
             teamTotalGoals: team_total_goals,
-            teamSlogan: "Test".to_string(),
+            teamSlogan: team_slogan.to_string(),
             topScorerStats: top_scorer,
             bestPasserStats: best_passer,
             ingestionDate: ingestion_date,

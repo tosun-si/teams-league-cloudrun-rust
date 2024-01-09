@@ -1,7 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::collections::HashMap;
 use std::convert::Infallible;
+use std::env;
 use std::net::SocketAddr;
 
 use bytes::Bytes;
@@ -10,7 +12,7 @@ use google_cloud_bigquery::http::tabledata::insert_all::InsertAllRequest;
 use google_cloud_storage::client::{Client as gcsClient, ClientConfig as gcsClientConfig};
 use google_cloud_storage::http::objects::download::Range;
 use google_cloud_storage::http::objects::get::GetObjectRequest;
-use http_body_util::{BodyExt, Full};
+use http_body_util::Full;
 use hyper::{Request, Response};
 use hyper::body::Body;
 use hyper::server::conn::http1;
@@ -30,6 +32,10 @@ lazy_static! {
     static ref INGESTION_DATE: Option<OffsetDateTime> = Some(OffsetDateTime::now_utc());
 }
 
+fn get_env_var(key: &str) -> String {
+    env::var(key).expect(format!("Env var {key} was not set ").as_str())
+}
+
 async fn raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>) -> Result<Response<Full<Bytes>>, Infallible> {
     println!("######################Request URI######################");
     println!("{:#?}", req.uri());
@@ -41,24 +47,34 @@ async fn raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>) ->
 
     println!("Reading team stats raw data from Cloud Storage...");
 
+    let input_bucket = get_env_var("INPUT_BUCKET");
+    let input_object = get_env_var("INPUT_OBJECT");
+    let output_dataset = get_env_var("OUTPUT_DATASET");
+    let output_table = get_env_var("OUTPUT_TABLE");
+
+    let team_slogans = HashMap::from([
+        ("PSG", "Paris est magique"),
+        ("Real", "Hala Madrid"),
+    ]);
+
     let gcs_client_config = gcsClientConfig::default().with_auth().await.unwrap();
     let gcs_client = gcsClient::new(gcs_client_config);
 
-    // Download the file
     let input_file_as_bytes_res = gcs_client.download_object(&GetObjectRequest {
-        bucket: "mazlum_dev".to_string(),
-        object: "cloud_run/team_league/input/input_teams_stats_raw.json".to_string(),
+        bucket: input_bucket.to_string(),
+        object: input_object.to_string(),
         ..Default::default()
     }, &Range::default()).await;
 
-    let result_file_as_string = match input_file_as_bytes_res {
+    let result_file_as_bytes = match input_file_as_bytes_res {
         Ok(v) => v,
         Err(e) => panic!("Error when reading the input file: {}", e),
     };
 
     let team_stats_domain_list = TeamStatsMapper::map_to_team_stats_domains(
         *INGESTION_DATE,
-        result_file_as_string,
+        team_slogans,
+        result_file_as_bytes,
     );
 
     let (config, project_id) = bigQueryClientConfig::new_with_auth().await.unwrap();
@@ -72,8 +88,8 @@ async fn raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>) ->
     };
     let result = client.tabledata().insert(
         project_id.unwrap().as_str(),
-        "mazlum_test",
-        "team_stat",
+        output_dataset.as_str(),
+        output_table.as_str(),
         &request,
     ).await.unwrap();
 

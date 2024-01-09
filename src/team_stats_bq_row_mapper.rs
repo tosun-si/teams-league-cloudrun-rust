@@ -1,6 +1,5 @@
 use google_cloud_bigquery::http::tabledata::insert_all::Row;
 
-use crate::domain;
 use crate::domain::team_stats_structs::TeamStats;
 
 pub struct TeamStatsBQRowMapper;
@@ -9,7 +8,7 @@ impl TeamStatsBQRowMapper {
     pub fn map_to_team_stats_bigquery_rows(team_stats_domain_list: Vec<TeamStats>) -> Vec<Row<TeamStats>> {
         team_stats_domain_list
             .iter()
-            .map(|team_stats| TeamStatsBQRowMapper::map_to_team_stats_bigquery_row(domain::team_stats_structs::TeamStats::clone(team_stats)))
+            .map(|team_stats| TeamStatsBQRowMapper::map_to_team_stats_bigquery_row(TeamStats::clone(team_stats)))
             .collect::<Vec<Row<TeamStats>>>()
     }
 

@@ -13,4 +13,8 @@ steps:
         gcloud run deploy $_SERVICE_NAME \
         --region $LOCATION \
         --image "$LOCATION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/$_SERVICE_NAME:$_IMAGE_TAG" \
-        --allow-unauthenticated
+        --allow-unauthenticated \
+        --set-env-vars INPUT_BUCKET="$_INPUT_BUCKET" \
+        --set-env-vars INPUT_OBJECT="$_INPUT_OBJECT" \
+        --set-env-vars OUTPUT_DATASET="$_OUTPUT_DATASET" \
+        --set-env-vars OUTPUT_TABLE="$_OUTPUT_TABLE"
