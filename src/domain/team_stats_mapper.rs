@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str;
+use anyhow::Context;
 
 use time::OffsetDateTime;
 
@@ -7,34 +8,31 @@ use crate::domain;
 use crate::domain::team_stats_structs::TeamScorerRaw;
 use crate::domain::team_stats_structs::TeamStats;
 use crate::domain::team_stats_structs::TeamStatsRaw;
+use crate::utils::TryMap;
 
 pub struct TeamStatsMapper;
 
 impl TeamStatsMapper {
     pub fn map_to_team_stats_domains(ingestion_date: Option<OffsetDateTime>,
                                      team_slogans: HashMap<&str, &str>,
-                                     result_file_as_bytes: Vec<u8>) -> Vec<TeamStats> {
-        str::from_utf8(result_file_as_bytes.as_slice())
-            .expect("")
+                                     result_file_as_bytes: Vec<u8>) -> anyhow::Result<Vec<TeamStats>> {
+        let result = str::from_utf8(result_file_as_bytes.as_slice())?
             .split('\n')
             .filter(|team_stats_raw| !team_stats_raw.is_empty())
             .map(TeamStatsMapper::deserialize_to_team_stats_raw_object)
-            .map(|team_stats_raw| TeamStatsMapper::map_to_team_stats_domain(ingestion_date, team_slogans.clone(), team_stats_raw))
-            .collect::<Vec<TeamStats>>()
+            .try_map(|team_stats_raw| TeamStatsMapper::map_to_team_stats_domain(ingestion_date, team_slogans.clone(), team_stats_raw))
+            .collect::<anyhow::Result<Vec<TeamStats>>>();
+        Ok(result?)
     }
 
-    fn deserialize_to_team_stats_raw_object(team_stats_raw_str: &str) -> TeamStatsRaw {
-        let res_deserialization = serde_json::from_str(team_stats_raw_str);
-
-        match res_deserialization {
-            Ok(team_stats_raw) => team_stats_raw,
-            Err(e) => panic!("couldn't deserialize the team stats str to object: {}", e),
-        }
+    fn deserialize_to_team_stats_raw_object(team_stats_raw_str: &str) -> anyhow::Result<TeamStatsRaw> {
+        serde_json::from_str(team_stats_raw_str)
+            .context("couldn't deserialize the team stats str to object")
     }
 
     fn map_to_team_stats_domain(ingestion_date: Option<OffsetDateTime>,
                                 team_slogans: HashMap<&str, &str>,
-                                team_stats_raw: TeamStatsRaw) -> TeamStats {
+                                team_stats_raw: TeamStatsRaw) -> anyhow::Result<TeamStats> {
         let team_name = team_stats_raw.team_name;
 
         let team_total_goals: i64 = team_stats_raw.scorers
@@ -45,12 +43,12 @@ impl TeamStatsMapper {
         let top_scorer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goals)
-            .unwrap_or_else(|| panic!("Top scorer not found for the team !! {team_name}"));
+            .context("Top scorer not found for the team !!")?;
 
         let best_passer_raw: &TeamScorerRaw = team_stats_raw.scorers
             .iter()
             .max_by_key(|scorer| scorer.goal_assists)
-            .unwrap_or_else(|| panic!("Best passer not found for the team !! {team_name}"));
+            .context("Best passer not found for the team !!")?;
 
         let top_scorer = domain::team_stats_structs::TopScorerStats {
             first_name: top_scorer_raw.scorer_first_name.to_string(),
@@ -67,9 +65,9 @@ impl TeamStatsMapper {
         };
 
         let team_slogan = team_slogans.get(team_name.as_str())
-            .unwrap_or_else(|| panic!("Slogan not found for the team {team_name}"));
+            .with_context(|| format!("Slogan not found for the team {team_name}"))?;
 
-        TeamStats {
+        Ok(TeamStats {
             team_name: team_name,
             team_score: team_stats_raw.team_score,
             team_total_goals: team_total_goals,
@@ -77,6 +75,6 @@ impl TeamStatsMapper {
             top_scorer_stats: top_scorer,
             best_passer_stats: best_passer,
             ingestion_date: ingestion_date,
-        }
+        })
     }
 }
