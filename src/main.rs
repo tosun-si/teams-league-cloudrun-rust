@@ -16,6 +16,7 @@ use google_cloud_storage::http::objects::get::GetObjectRequest;
 use http_body_util::Full;
 use hyper::{Request, Response};
 use hyper::body::Body;
+use hyper::header::CONTENT_TYPE;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
@@ -42,7 +43,12 @@ async fn raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>) ->
     match try_raw_to_team_stats_domain_and_load_result_bq(req).await {
         ok_response @ Ok(_) => ok_response,
         Err(err) => {
-            Ok(Response::builder().status(500).body(format!("{:?}", err).into()).unwrap())
+            Ok(Response::builder()
+                .status(500)
+                .header(CONTENT_TYPE, "text/plain")
+                // Returning errors in http responses can expose sensitive information but is fine for this example.
+                .body(format!("{:?}", err).into())?
+            )
         }
     }
 }
@@ -52,8 +58,12 @@ async fn try_raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>
     println!("{:#?}", req.uri());
     println!("######################");
 
-    if req.uri().eq("/favicon.ico") {
-        return Ok(Response::new(Full::new(Bytes::from("Not the expected URI, no treatment in this case"))));
+    if !req.uri().eq("/") {
+        return Ok(Response::builder()
+            .status(404)
+            .header(CONTENT_TYPE, "text/plain")
+            .body("Not the expected URI, no treatment in this case".into())?
+        );
     }
 
     println!("Reading team stats raw data from Cloud Storage...");
