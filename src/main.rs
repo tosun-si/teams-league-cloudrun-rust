@@ -82,7 +82,7 @@ async fn try_raw_to_team_stats_domain_and_load_result_bq(req: Request<impl Body>
 
     let team_stats_domain_list = TeamStatsMapper::map_to_team_stats_domains(
         *INGESTION_DATE,
-        team_slogans,
+        &team_slogans,
         result_file_as_bytes,
     );
 

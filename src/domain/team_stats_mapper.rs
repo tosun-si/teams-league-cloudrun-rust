@@ -14,13 +14,13 @@ pub struct TeamStatsMapper;
 
 impl TeamStatsMapper {
     pub fn map_to_team_stats_domains(ingestion_date: Option<OffsetDateTime>,
-                                     team_slogans: HashMap<&str, &str>,
+                                     team_slogans: &HashMap<&str, &str>,
                                      result_file_as_bytes: Vec<u8>) -> anyhow::Result<Vec<TeamStats>> {
         let result = str::from_utf8(result_file_as_bytes.as_slice())?
             .split('\n')
             .filter(|team_stats_raw| !team_stats_raw.is_empty())
             .map(TeamStatsMapper::deserialize_to_team_stats_raw_object)
-            .try_map(|team_stats_raw| TeamStatsMapper::map_to_team_stats_domain(ingestion_date, team_slogans.clone(), team_stats_raw))
+            .try_map(|team_stats_raw| TeamStatsMapper::map_to_team_stats_domain(ingestion_date, team_slogans, team_stats_raw))
             .collect::<anyhow::Result<Vec<TeamStats>>>();
         Ok(result?)
     }
@@ -31,7 +31,7 @@ impl TeamStatsMapper {
     }
 
     fn map_to_team_stats_domain(ingestion_date: Option<OffsetDateTime>,
-                                team_slogans: HashMap<&str, &str>,
+                                team_slogans: &HashMap<&str, &str>,
                                 team_stats_raw: TeamStatsRaw) -> anyhow::Result<TeamStats> {
         let team_name = team_stats_raw.team_name;
 
